@@ -1,0 +1,19 @@
+% if phase is choose, currently pass
+pass :- phase(choose).
+
+% recursively generate all possible troop deployment counts - from 1 to all available troops
+n(N) :- to_fortify(N).
+count(1) :- n(_).
+count(B) :- count(A), n(N), A < N, B = A + 1.
+
+% fortify territory MYTERRITORY with COUNT troops, given phase is fortify and we own said territory
+0 < {fortify(MYTERRITORY, COUNT) : owner(MYTERRITORY, ID), count(COUNT)} <= N :- phase(fortify), my_id(ID), to_fortify(N).
+
+% make sure the number of troops fortified in total is equal to the number of troops available
+:- to_fortify(N), #sum{NUM, MYTERRITORY : fortify(MYTERRITORY, NUM)} != N.
+
+% don't fortify the same territory twice
+:- fortify(T, C1), fortify(T, C2), C1 != C2.
+
+% randomly choose territory (for now) (choose territory with lowest ID num)
+:- #min{T: owner(T, ID)} = MIN, my_id(ID), fortify(FT, _), FT != MIN.
