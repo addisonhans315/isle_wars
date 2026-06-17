@@ -36,8 +36,7 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 % ========== CHOOSE ========================
 
 % TODO: attack stage - GUESS
-{attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET); pass} = 1 :- phase(choose).
-% {pass} :- phase(choose).
+{attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET); pass; move(FROM, TO, N) : mine(FROM), mine(TO), to_m(N), FROM != TO} = 1 :- phase(choose).
 
 % ATTACK - CHECK
 % verify you have at least two armies on attacking territory
@@ -66,16 +65,22 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 
 % {move(MT, ET, N) : mine(MT), enemy_owned(ET), conquered(MT, ET), to_move_count(N)} = 1 :- phase(conquer).
 
-% % TODO: move stage
-% % move troops from one territory you own to another you own
-% % don't move more armies than what you have - 1
-% :- move(FROM, TO, N), armies_present(FROM, N2), N >= N2.
+% TODO: move stage
+% move troops from one territory you own to another you own
+num(N) :- mine(FROM), armies_present(FROM, N).
+to_m(1) :- num(_).
+to_m(B) :- to_m(A), num(N), A < N, B = A + 1.
+% don't move more armies than what you have - 1
+:- move(FROM, TO, N), armies_present(FROM, N2), territory(TO), N >= N2.
 
-% % don't move troops from a territory with one troop
-% :- move(FROM, TO, N), armies_present(FROM, 1), not phase(conquer).
+% don't move troops from a territory with one troop
+:- move(FROM, TO, N), armies_present(FROM, 1), not phase(conquer).
 
-% % prefer to not move troops to a territory that doesn't border enemies (HIGH PRIORITY)
-% :~ move(FROM, TO, N), not borders_enemy(TO), not phase(conquer). [1@2, FROM, TO, N]
+% prefer to not move troops to a territory that doesn't border enemies (HIGH PRIORITY)
+:~ move(FROM, TO, N), not borders_enemy(TO), not phase(conquer). [N@2, FROM, TO, N]
+% weight for moving
+:~ move(FROM, TO, N). [400@2, FROM, TO, N]
 
 #show attack/2.
 #show pass/0.
+#show move/3.
