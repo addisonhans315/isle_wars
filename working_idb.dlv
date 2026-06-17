@@ -1,5 +1,17 @@
-% if phase is choose, currently pass
-pass :- phase(choose).
+% ============ GLOBAL HELPERS =============
+mine(T) :- owner(T, ID), my_id(ID).
+enemy_owned(T) :- owner(T, EID), my_id(ID), EID != ID.
+borders_enemy(TERR) :- owner(TERR, MYID), my_id(MYID), owner(OTHER, OTHERID), MYID != OTHERID, neighbor(TERR, OTHER).
+interior(T) :- mine(T), not borders_enemy(T).
+
+continent_size(C, SZ) :- in_continent(_, C), SZ = #count{T : in_continent(T, C)}.
+my_cont_count(C, CNT) :- in_continent(_, C), CNT = #count{T : mine(T), in_continent(T, C)}.
+controls_continent(C) :- continent_size(C, SZ), my_cont_count(C, SZ).
+enemy_continent_count(C, EID, CNT) :- in_continent(_, C), my_id(ID), owner(_, EID), EID != ID, #count{T : owner(T, EID), in_continent(T, C)} = CNT.
+enemy_controls_continent(C, EID) :- continent_size(C, SZ), enemy_continent_count(C, EID, SZ).
+
+% ========== FORTIFY ========================
+
 
 % recursively generate all possible troop deployment counts - from 1 to all available troops
 n(N) :- to_fortify(N).
@@ -10,10 +22,60 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 0 < {fortify(MYTERRITORY, COUNT) : owner(MYTERRITORY, ID), count(COUNT)} <= N :- phase(fortify), my_id(ID), to_fortify(N).
 
 % make sure the number of troops fortified in total is equal to the number of troops available
-:- to_fortify(N), #sum{NUM, MYTERRITORY : fortify(MYTERRITORY, NUM)} != N.
+:- phase(fortify), to_fortify(N), #sum{NUM, MYTERRITORY : fortify(MYTERRITORY, NUM)} != N.
 
 % don't fortify the same territory twice
 :- fortify(T, C1), fortify(T, C2), C1 != C2.
 
 % randomly choose territory (for now) (choose territory with lowest ID num)
-:- #min{T: owner(T, ID)} = MIN, my_id(ID), fortify(FT, _), FT != MIN.
+:~ #min{T: owner(T, ID)} = MIN, my_id(ID), fortify(FT, NUM), FT != MIN. [1@1, FT, NUM]
+
+% require to not fortify territories that are not neighbors with any enemies
+:~ fortify(MYTERRITORY, NUM), not borders_enemy(MYTERRITORY). [1@2, MYTERRITORY, NUM]
+
+% ========== CHOOSE ========================
+
+% TODO: attack stage - GUESS
+{attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET); pass} = 1 :- phase(choose).
+% {pass} :- phase(choose).
+
+% ATTACK - CHECK
+% verify you have at least two armies on attacking territory
+:- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), MA < 2.
+
+% have at least as many armies as the territory you are attacking
+:- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), armies_present(ET, EA), MA*10 < EA*18.
+
+% ATTACK - OPTIMIZE
+% push for continent completion
+:~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ). [SZ-CNT@2, MT, ET]
+
+% break enemy continents
+:~ attack(MT, ET), in_continent(ET, C), enemy_controls_continent(C, EID). [-100@2, MT, ET, EID]
+
+% prioritize army advantage
+:~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [200-DIFF@2, MT, ET]
+
+:~ pass. [500@2]
+
+% % TODO: conquer stage
+% % if an attack succeeds, we need to determine how to conquer, i.e. how many troops to move into that territory (must be at least 1)
+% to_move_n(N) :- mine(MT), armies_present(MT, N), conquered(MT,_).
+% to_move_count(1) :- to_move_n(_).
+% to_move_count(B) :- to_move_count(A), to_move_n(N), A < N, B = A + 1.
+
+% {move(MT, ET, N) : mine(MT), enemy_owned(ET), conquered(MT, ET), to_move_count(N)} = 1 :- phase(conquer).
+
+% % TODO: move stage
+% % move troops from one territory you own to another you own
+% % don't move more armies than what you have - 1
+% :- move(FROM, TO, N), armies_present(FROM, N2), N >= N2.
+
+% % don't move troops from a territory with one troop
+% :- move(FROM, TO, N), armies_present(FROM, 1), not phase(conquer).
+
+% % prefer to not move troops to a territory that doesn't border enemies (HIGH PRIORITY)
+% :~ move(FROM, TO, N), not borders_enemy(TO), not phase(conquer). [1@2, FROM, TO, N]
+
+#show attack/2.
+#show pass/0.
