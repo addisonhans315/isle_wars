@@ -1,58 +1,58 @@
-
-armies_present(1,1).
-armies_present(10,3).
-armies_present(11,6).
-armies_present(12,6).
-armies_present(13,3).
-armies_present(14,6).
-armies_present(15,4).
-armies_present(16,2).
-armies_present(17,1).
-armies_present(18,5).
-armies_present(19,1).
-armies_present(2,1).
-armies_present(20,1).
-armies_present(21,6).
-armies_present(22,4).
-armies_present(23,2).
-armies_present(24,2).
-armies_present(25,6).
-armies_present(26,6).
-armies_present(3,1).
-armies_present(4,4).
-armies_present(5,6).
-armies_present(6,5).
-armies_present(7,4).
-armies_present(8,6).
-armies_present(9,1).
+% Territory Ownership
 my_id(0).
-owner(1,1).
-owner(10,2).
-owner(11,0).
-owner(12,2).
-owner(13,1).
-owner(14,2).
-owner(15,1).
-owner(16,2).
-owner(17,1).
-owner(18,0).
-owner(19,0).
-owner(2,2).
-owner(20,1).
-owner(21,0).
-owner(22,0).
-owner(23,1).
-owner(24,1).
-owner(25,2).
-owner(26,1).
-owner(3,2).
-owner(4,2).
-owner(5,0).
-owner(6,0).
-owner(7,1).
-owner(8,1).
-owner(9,0).
+owner(1, 1).
+owner(2, 0).
+owner(3, 2).
+owner(4, 2).
+owner(5, 2).
+owner(6, 0).
+owner(7, 0).
+owner(8, 0).
+owner(9, 0).
+owner(10, 0).
+owner(11, 2).
+owner(12, 1).
+owner(13, 1).
+owner(14, 0).
+owner(15, 1).
+owner(16, 1).
+owner(17, 1).
+owner(18, 0).
+owner(19, 0).
+owner(20, 0).
+owner(21, 0).
+owner(22, 0).
+owner(23, 0).
+owner(24, 0).
+owner(25, 1).
+owner(26, 1).
+
+% Armies Present
+armies_present(1, 38).
+armies_present(2, 1).
+armies_present(3, 18).
+armies_present(4, 20).
+armies_present(5, 26).
+armies_present(6, 1).
+armies_present(7, 1).
+armies_present(8, 1).
+armies_present(9, 1).
+armies_present(10, 270).
+armies_present(11, 7).
+armies_present(12, 25).
+armies_present(13, 14).
+armies_present(14, 1).
+armies_present(15, 13).
+armies_present(16, 8).
+armies_present(17, 27).
+armies_present(18, 1).
+armies_present(19, 1).
+armies_present(20, 1).
+armies_present(21, 1).
+armies_present(22, 5).
+armies_present(23, 1).
+armies_present(24, 1).
+armies_present(25, 17).
+armies_present(26, 26).
 
 phase(choose).
-% conquered(11, 10).
-% to_fortify(3).
