@@ -98,13 +98,13 @@ to_move_count(B) :- to_move_count(A), to_move_n(N), A < N - 1, B = A + 1.
 % hard constraint to move all troops away from territory if it no longer borders any territories
 % weak constraint to move the max -1 available armies
 :~ move(MT, ET, N). [400-N@2, MT, ET, N]
-:~ move(MT, ET, N), border_enemy_conq(MT), armies_present(MT, MA), N = MA / 2. [200-N@2, MT, ET, N]
+:~ move(MT, ET, N), borders_enemy_conq(MT), armies_present(MT, MA), N = MA / 2. [200-N@2, MT, ET, N]
 
 
 
 
 
-% #show attack/2.
-% #show pass/0.
-% #show move/3.
-% #show fortify/2.
+#show attack/2.
+#show pass/0.
+#show move/3.
+#show fortify/2.
