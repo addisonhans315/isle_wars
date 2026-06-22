@@ -44,8 +44,9 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 :~ fortify(MYTERRITORY, NUM), not borders_enemy(MYTERRITORY). [1@2, MYTERRITORY, NUM]
 
 % ======(CHOOSE)====== ATTACK ====================
-{attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET); pass; move(FROM, TO, N) : mine(FROM), mine(TO), to_m(N), FROM != TO} = 1 :- phase(choose).
-
+{ attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET);
+  move(FROM, TO, N) : mine(FROM), mine(TO), to_m(N), FROM != TO;
+  pass } = 1 :- phase(choose).
 % verify you have at least two armies on attacking territory
 :- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), MA < 2.
 
@@ -63,14 +64,14 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 
 % ======(CHOOSE)====== PASS ====================
 % weight for pass, right now only is chosen as a last resort, if no attacks or moves are valid
-:~ pass. [500@2]
+:~ pass. [5000@2]
 
 % ======(CHOOSE)====== MOVE ====================
 % move troops from one territory you own to another you own
 % generate to_m(B) for every number between 1, and 1 less than the max amount of troops on the attacking territory.
-num(N) :- mine(FROM), armies_present(FROM, N), phase(choose).
-to_m(1) :- num(_).
-to_m(B) :- to_m(A), num(N), A < N, B = A + 1.
+num(N)   :- mine(FROM), armies_present(FROM, N), phase(choose).
+to_m(1)  :- num(_).
+to_m(B)  :- to_m(A), num(N), A < N, B = A + 1.
 
 % don't move more armies than what you have - 1
 :- move(FROM, TO, N), armies_present(FROM, N2), territory(TO), N >= N2.
@@ -98,7 +99,13 @@ to_move_count(B) :- to_move_count(A), to_move_n(N), A < N - 1, B = A + 1.
 % hard constraint to move all troops away from territory if it no longer borders any territories
 % weak constraint to move the max -1 available armies
 :~ move(MT, ET, N). [400-N@2, MT, ET, N]
-:~ move(MT, ET, N), borders_enemy_conq(MT), armies_present(MT, MA), N = MA / 2. [200-N@2, MT, ET, N]
+% :~ move(MT, ET, N), borders_enemy_conq(MT), armies_present(MT, MA), N = MA / 2. [200-N@2, MT, ET, N]
+
+
+
+% if the source still borders enemies, prefer keeping ~half back: penalize N by its distance from MA/2 (DLV2 has no abs, so the N>=half and N<half sides are split) at @3 to override the "move max" rule above
+:~ move(MT,ET,N), borders_enemy_conq(MT), armies_present(MT,MA), N >= MA/2, D = N - MA/2. [D@3, MT, ET, N]
+:~ move(MT,ET,N), borders_enemy_conq(MT), armies_present(MT,MA), N <  MA/2, D = MA/2 - N. [D@3, MT, ET, N]
 
 
 
@@ -108,3 +115,6 @@ to_move_count(B) :- to_move_count(A), to_move_n(N), A < N - 1, B = A + 1.
 #show pass/0.
 #show move/3.
 #show fortify/2.
+
+% #show debug_num/2.
+debug_num(T, N) :- mine(T), armies_present(T, N), phase(choose).

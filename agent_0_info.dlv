@@ -1,58 +1,45 @@
 % Territory Ownership
 my_id(0).
-owner(1, 1).
-owner(2, 0).
-owner(3, 2).
-owner(4, 2).
-owner(5, 2).
-owner(6, 0).
-owner(7, 0).
-owner(8, 0).
-owner(9, 0).
-owner(10, 0).
-owner(11, 2).
-owner(12, 1).
-owner(13, 1).
-owner(14, 0).
-owner(15, 1).
-owner(16, 1).
-owner(17, 1).
-owner(18, 0).
-owner(19, 0).
-owner(20, 0).
-owner(21, 0).
-owner(22, 0).
-owner(23, 0).
-owner(24, 0).
-owner(25, 1).
-owner(26, 1).
+owner(1, 0). owner(2, 2). owner(3, 2). owner(4, 1).
+owner(5, 2). owner(6, 2). owner(7, 0). owner(8, 1).
+owner(9, 0). owner(10, 0). owner(11, 1). owner(12, 1).
+owner(13, 0). owner(14, 0). owner(15, 0). owner(16, 1).
+owner(17, 0). owner(18, 1). owner(19, 0). owner(20, 0).
+owner(21, 1). owner(22, 0). owner(23, 1). owner(24, 0).
+owner(25, 0). owner(26, 2).
 
 % Armies Present
-armies_present(1, 38).
-armies_present(2, 1).
-armies_present(3, 18).
-armies_present(4, 20).
-armies_present(5, 26).
-armies_present(6, 1).
+% Scenario: move should be chosen in phase(choose).
+% - Every territory I own has 1 army (cannot attack: needs >= 2) EXCEPT 17.
+% - 17 has 10 armies but its only enemy neighbors (16, 18) have 100 each,
+%   so 17*10 < 100*18 => attack is forbidden by the hard constraint.
+% - 17 borders friendly 15/19/20, so a maneuver move is the only useful action,
+%   which beats pass (move=400 vs pass=5000).
+armies_present(1, 1).
+armies_present(2, 32).
+armies_present(3, 21).
+armies_present(4, 153).
+armies_present(5, 28).
+armies_present(6, 27).
 armies_present(7, 1).
 armies_present(8, 1).
 armies_present(9, 1).
-armies_present(10, 270).
-armies_present(11, 7).
-armies_present(12, 25).
-armies_present(13, 14).
+armies_present(10, 1).
+armies_present(11, 3).
+armies_present(12, 3).
+armies_present(13, 1).
 armies_present(14, 1).
-armies_present(15, 13).
-armies_present(16, 8).
-armies_present(17, 27).
-armies_present(18, 1).
+armies_present(15, 1).
+armies_present(16, 100).
+armies_present(17, 10).
+armies_present(18, 100).
 armies_present(19, 1).
 armies_present(20, 1).
-armies_present(21, 1).
-armies_present(22, 5).
-armies_present(23, 1).
+armies_present(21, 6).
+armies_present(22, 1).
+armies_present(23, 3).
 armies_present(24, 1).
-armies_present(25, 17).
-armies_present(26, 26).
+armies_present(25, 1).
+armies_present(26, 5).
 
 phase(choose).
