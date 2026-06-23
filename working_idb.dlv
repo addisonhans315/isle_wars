@@ -55,8 +55,8 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 :~ fortify(MT, N), not weakest_territory(MT). [200 + N@2, MT, N]
 
 % ======(CHOOSE)====== ATTACK ====================
-{attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET); pass; move(FROM, TO, N) : mine(FROM), mine(TO), to_m(N), FROM != TO} = 1 :- phase(choose).
-
+{attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET); pass; move(FROM, TO, N) : mine(FROM), mine(TO), neighbor(FROM, TO),
+                    to_m(N), armies_present(FROM, A), N < A, FROM != TO} = 1 :- phase(choose).
 % verify you have at least two armies on attacking territory
 :- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), MA < 2.
 
