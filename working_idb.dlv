@@ -6,8 +6,10 @@ enemy_owned(T) :- owner(T, EID), my_id(ID), EID != ID.
 % territories we own that border territories we don't own
 borders_enemy(TERR) :- owner(TERR, MYID), my_id(MYID), owner(OTHER, OTHERID), MYID != OTHERID, neighbor(TERR, OTHER).
 % specific borders_enemy for the conquer stage, see if newly conquered territory is bordered by enemies
-borders_enemy_conq(MT) :- phase(conquer), conquered(MT, CT), my_id(MYID), owner(BORDERTERR, BORDERID),
-                          CT != BORDERTERR, MYID != BORDERID, neighbor(MT, BORDERTERR).
+borders_enemy_conq(MT) :- phase(conquer), conquered(MT, CT), my_id(MYID), owner(BORDERTERR, BORDERID), CT != BORDERTERR, MYID != BORDERID, neighbor(MT, BORDERTERR).
+% our territory with smallest number of armies
+weakest_territory(MT) :- mine(MT), #min{ARMIES : armies_present(TERR, ARMIES), mine(TERR)} = MIN, armies_present(MT, MIN).
+
 
 % territories we own that only border territories we own
 interior(T) :- mine(T), not borders_enemy(T).
@@ -25,7 +27,7 @@ enemy_controls_continent(C, EID) :- continent_size(C, SZ), enemy_continent_count
 % how many territories (NUM) an enemy (EID) has
 enemy_country_count(EID, NUM) :- my_id(ID), owner(TERRITORY, EID), ID != EID, #count{T : owner(T, ENEMY), ENEMY = EID} = NUM.
 
-% ==================== FOFTIFY ====================
+% ==================== FORTIFY ====================
 % recursively generate all possible troop deployment counts - from 1 to all available troops
 n(N) :- to_fortify(N).
 count(1) :- n(_).
@@ -48,6 +50,9 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 
 % prefer to fortify territories where enemies are stronger
 :~ fortify(MT, N), my_id(ID), neighbor(MT, ET), armies_present(MT, MA), armies_present(ET, EA). [EA-MA@2, MT, N]
+
+% prefer to fortify weaker territories
+:~ fortify(MT, N), not weakest_territory(MT). [200 + N@2, MT, N]
 
 % ======(CHOOSE)====== ATTACK ====================
 { attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET);
@@ -85,9 +90,30 @@ decisive_attack(MT, ET) :- mine(MT), enemy_owned(ET), neighbor(MT, ET), armies_p
 :~ attack(MT, ET), not decisive_attack(MT, ET). [600@2, MT, ET]
 
 
+% prefer targeting more powerful opponents (lower priority)
+:~ attack(MT, ET), #max{COUNT : enemy_country_count(EID, COUNT)} = MAXTERR, enemy_country_count(EID, MAXTERR),
+    owner(ET, OTHER), OTHER != EID. [48-MAXTERR@1, MT, ET]
+
+% attack for the love of god (NO PACIFISM!!!!!!!!)
+:- not attack(MT, ET), neighbors(MT, ET), armies_present(MT, MA), armies_present(ET, EA), MA - EA >= 50.
+
+% an attack is decisive when we hold a clear edge over the defender
+decisive_attack(MT, ET) :- mine(MT), enemy_owned(ET), neighbor(MT, ET), armies_present(MT, MA), armies_present(ET, EM), MA >= 2*EA.
+
+% a decisive attack outranks any move/pass/thin attack
+:~ attack(MT, ET), decisive_attack(MT, ET). [-1@3, MT, ET]
+
+% if no decisive attack is chosen, penalize the thin attack in order to consolidate
+:~ attack(MT, ET), not decisive_attack(MT, ET). [600@2, MT, ET]
+
+
+% prefer targeting more powerful opponents (lower priority)
+:~ attack(MT, ET), #max{COUNT : enemy_country_count(EID, COUNT)} = MAXTERR, enemy_country_count(EID, MAXTERR),
+    owner(ET, OTHER), OTHER != EID. [48-MAXTERR@1, MT, ET]
+
 % ======(CHOOSE)====== PASS ====================
 % weight for pass, right now only is chosen as a last resort, if no attacks or moves are valid
-:~ pass. [5000@2]
+:~ pass. [500@2]
 
 % ======(CHOOSE)====== MOVE ====================
 % move troops from one territory you own to another you own
@@ -109,7 +135,7 @@ to_m(B)  :- to_m(A), num(N), A < N, B = A + 1, B < 51.
 :- move(FROM, TO, N), not neighbor(FROM, TO).
 
 % prefer to not move troops to a territory that doesn't border enemies (HIGH PRIORITY)
-:~ move(FROM, TO, N), not borders_enemy(TO), phase(choose). [N@2, FROM, TO, N]
+:~ move(FROM, TO, N), not borders_enemy(TO). [N@2, FROM, TO, N]
 
 % =====()====== CONQUER ====================
 % % if an attack succeeds, we need to determine how to conquer, i.e. how many troops to move into that territory (must be at least 1)
