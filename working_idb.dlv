@@ -72,9 +72,9 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 % prioritize army advantage
 :~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [300-DIFF@2, MT, ET]
 
-% prefer targeting more powerful opponents (lower priority)
-:~ attack(MT, ET), #max{COUNT : enemy_country_count(EID, COUNT)} = MAXTERR, enemy_country_count(EID, MAXTERR),
-    owner(ET, OTHER), OTHER != EID. [48-MAXTERR@1, MT, ET]
+% prefer targeting weaker opponents (lower priority)
+:~ attack(MT, ET), #min{COUNT : enemy_country_count(EID, COUNT)} = MINTERR, enemy_country_count(EID, MINTERR),
+    owner(ET, OTHER), OTHER != EID. [48-MINTERR@1, MT, ET]
 
 % ======(CHOOSE)====== PASS ====================
 % weight for pass, right now only is chosen as a last resort, if no attacks or moves are valid
@@ -99,7 +99,7 @@ to_m(B) :- to_m(A), num(N), A < N, B = A + 1, B < 51.
 % can only move troops to neighboring territories
 :- move(FROM, TO, N), not neighbor(FROM, TO).
 
-% prefer to not move troops to a territory that doesn't border enemies (HIGH PRIORITY)
+% prefer to not move troops to a territory that doesn't border enemies
 :~ move(FROM, TO, N), not borders_enemy(TO). [N@2, FROM, TO, N]
 
 % =====(CHOOSE)====== CONQUER ====================
