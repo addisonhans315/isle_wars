@@ -105,6 +105,9 @@ to_m(B) :- to_m(A), num(N), A < N, B = A + 1, B < 51.
 % prefer to not move troops to a territory that doesn't border enemies
 :~ move(FROM, TO, N), not borders_enemy(TO). [N@2, FROM, TO, N]
 
+% stop shuffling troops
+:~ move(FROM, TO, N), nearest_front(FROM, MIN), nearest_front(TO, MIN). [300@2, FROM, TO, N]
+
 % =====(CHOOSE)====== CONQUER ====================
 % % if an attack succeeds, we need to determine how to conquer, i.e. how many troops to move into that territory (must be at least 1)
 to_move_n(N) :- armies_present(MT, N), conquered(MT, ET).
