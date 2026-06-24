@@ -115,9 +115,9 @@ to_move_count(B) :- to_move_count(A), to_move_n(N), A < N - 1, B = A + 1, B < 51
 
 half(MT, H) :- conquered(MT, _), armies_present(MT, MA), H = MA / 2.
 
-% Source tile now SAFE -> shove everything forward.
+% if current territory does not border an enemy now, move all troops to new territory
 :~ move(MT, ET, N), phase(conquer), not borders_enemy_conq(MT). [400 - N@2, MT, ET, N]
-% Source still faces enemies -> leave a garrison ~ half.
+% if current territory still borders enemies, move approx. half
 :~ move(MT, ET, N), phase(conquer), borders_enemy_conq(MT), half(MT, H), N >  H. [N - H@2, MT, ET, N]
 :~ move(MT, ET, N), phase(conquer), borders_enemy_conq(MT), half(MT, H), N <= H. [H - N@2, MT, ET, N]
 
