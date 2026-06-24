@@ -6,14 +6,12 @@ enemy_owned(T) :- owner(T, EID), my_id(ID), EID != ID.
 % territories we own that border territories we don't own
 borders_enemy(TERR) :- owner(TERR, MYID), my_id(MYID), owner(OTHER, OTHERID), MYID != OTHERID, neighbor(TERR, OTHER).
 % specific borders_enemy for the conquer stage, see if newly conquered territory is bordered by enemies
-borders_enemy_conq(MT) :- phase(conquer), conquered(MT, CT), my_id(MYID), owner(BORDERTERR, BORDERID), CT != BORDERTERR, MYID != BORDERID, neighbor(MT, BORDERTERR).
+borders_enemy_conq(MT) :- phase(conquer), conquered(MT, CT), my_id(MYID), owner(BORDERTERR, BORDERID), 
+    CT != BORDERTERR, MYID != BORDERID, neighbor(MT, BORDERTERR).
 % our territory with smallest number of armies
 weakest_territory(MT) :- mine(MT), #min{ARMIES : armies_present(TERR, ARMIES), mine(TERR)} = MIN, armies_present(MT, MIN).
-
-
 % territories we own that only border territories we own
 interior(T) :- mine(T), not borders_enemy(T).
-
 % how many countries are in a continent
 continent_size(C, SZ) :- in_continent(_, C), SZ = #count{T : in_continent(T, C)}.
 % how many territories (CNT) we own in a continent (C)
@@ -21,11 +19,24 @@ my_cont_count(C, CNT) :- in_continent(_, C), CNT = #count{T : mine(T), in_contin
 % if we control a continent (C)
 controls_continent(C) :- continent_size(C, SZ), my_cont_count(C, SZ).
 % how many territories (CNT) owned by an enemy (EID) in a continent (C)
-enemy_continent_count(C, EID, CNT) :- in_continent(_, C), my_id(ID), owner(_, EID), EID != ID, #count{T : owner(T, EID), in_continent(T, C)} = CNT.
+enemy_continent_count(C, EID, CNT) :- in_continent(_, C), my_id(ID), owner(_, EID), EID != ID, 
+    #count{T : owner(T, EID), in_continent(T, C)} = CNT.
 % if an enemy (EID) controls a continent (C)
 enemy_controls_continent(C, EID) :- continent_size(C, SZ), enemy_continent_count(C, EID, SZ).
 % how many territories (NUM) an enemy (EID) has
 enemy_country_count(EID, NUM) :- my_id(ID), owner(TERRITORY, EID), ID != EID, #count{T : owner(T, ENEMY), ENEMY = EID} = NUM.
+% gets max distnace
+max_dist(D) :- D = #count{T : territory(T)}.
+% sets starting frontline
+front_dist(T, 0) :- borders_enemy(T).
+% flood distance through land we own
+front_dist(T, D) :- mine(T), neighbor(T, M), front_dist(M, D0), D = D0 + 1, max_dist(MX), D <= MX.
+% keep only the shortest distance per tile
+nearest_front(T, MIN) :- front_dist(T, _), MIN = #min{D : front_dist(T, D)}.
+% weakest enemy army adjacent to one of our front tiles (lower = easier future attack)
+min_adj_enemy(T, S) :- borders_enemy(T), my_id(MYID),
+    S = #min{EA, ET : neighbor(T, ET), owner(ET, EID), EID != MYID, armies_present(ET, EA)}.
+
 
 % ==================== FORTIFY ====================
 % recursively generate all possible troop deployment counts - from 1 to all available troops
@@ -52,9 +63,13 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 % prefer to fortify weaker territories
 :~ fortify(MT, N), not weakest_territory(MT). [200 + N@2, MT, N]
 
-% ======(CHOOSE)====== ATTACK ====================
+
+% ========(CHOOSE)===== CHOICE-RULE ============
 {attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET); pass; move(FROM, TO, N) : mine(FROM), mine(TO), neighbor(FROM, TO),
                     to_m(N), armies_present(FROM, A), N < A, FROM != TO} = 1 :- phase(choose).
+
+
+% ======(CHOOSE)====== ATTACK ====================
 % verify you have at least two armies on attacking territory
 :- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), MA <= 2.
 
@@ -77,9 +92,11 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 :~ attack(MT, ET), #max{COUNT : enemy_country_count(EID, COUNT)} = MAXTERR, enemy_country_count(EID, MAXTERR),
     owner(ET, OTHER), OTHER != EID. [48-MAXTERR@1, MT, ET]
 
+
 % ======(CHOOSE)====== PASS ====================
 % weight for pass, right now only is chosen as a last resort, if no attacks or moves are valid
 :~ pass. [5000@2]
+
 
 % ======(CHOOSE)====== MOVE ====================
 % move troops from one territory you own to another you own
@@ -91,14 +108,14 @@ to_m(B) :- to_m(A), num(N), A < N, B = A + 1, B < 51.
 % don't move more armies than what you have - 1
 :- move(FROM, TO, N), armies_present(FROM, N2), territory(TO), N >= N2.
 
-% general weight for moving compared to attack or pass
-:~ move(FROM, TO, N), phase(choose). [800@2, FROM, TO, N]
-
 % don't move troops from a territory with one troop
 :- move(FROM, TO, N), armies_present(FROM, 1), phase(choose).
 
 % can only move troops to neighboring territories
 :- move(FROM, TO, N), not neighbor(FROM, TO).
+
+% general weight for moving compared to attack or pass
+:~ move(FROM, TO, N), phase(choose). [800@2, FROM, TO, N]
 
 % prefer to not move troops to a territory that doesn't border enemies
 :~ move(FROM, TO, N), not borders_enemy(TO). [N@2, FROM, TO, N]
@@ -106,47 +123,41 @@ to_m(B) :- to_m(A), num(N), A < N, B = A + 1, B < 51.
 % stop shuffling troops
 :~ move(FROM, TO, N), nearest_front(FROM, MIN), nearest_front(TO, MIN). [300@2, FROM, TO, N]
 
+% march troops toward the front: reward scales with stack size and hops gained,
+% so big stacks move first and prefer the route that closes the most distance
+:~ move(FROM, TO, N), phase(choose), nearest_front(FROM, DF), nearest_front(TO, DT), 
+    DT < DF, R = (DF - DT) * N * 10. [0 - R@2, FROM, TO, N]
+
+% symmetric penalty so we never retreat a stack toward the rear
+:~ move(FROM, TO, N), phase(choose), nearest_front(FROM, DF), nearest_front(TO, DT), 
+    DT > DF, P = (DT - DF) * N * 10. [P@2, FROM, TO, N]
+
+% among equally-positioned destinations, pile the biggest stack onto the
+% front tile facing the weakest enemy, setting up a decisive attack next turn
+:~ move(FROM, TO, N), phase(choose), min_adj_enemy(TO, S), C = S - 10 * N. [C@1, FROM, TO, N]
+
+
 % =====(CHOOSE)====== CONQUER ====================
 % % if an attack succeeds, we need to determine how to conquer, i.e. how many troops to move into that territory (must be at least 1)
 to_move_n(N) :- armies_present(MT, N), conquered(MT, ET).
 to_move_count(1) :- to_move_n(N), N > 1.
 to_move_count(B) :- to_move_count(A), to_move_n(N), A < N - 1, B = A + 1, B < 51.
 
+% conquer choice rule
 {move(MT, ET, N) : mine(MT), enemy_owned(ET), conquered(MT, ET), to_move_count(N)} = 1 :- phase(conquer).
 
+% specific helper to get a value of half of present armies
 half(MT, H) :- conquered(MT, _), armies_present(MT, MA), H = MA / 2.
 
 % if current territory does not border an enemy now, move all troops to new territory
 :~ move(MT, ET, N), phase(conquer), not borders_enemy_conq(MT). [400 - N@2, MT, ET, N]
+
 % if current territory still borders enemies, move approx. half
 :~ move(MT, ET, N), phase(conquer), borders_enemy_conq(MT), half(MT, H), N >  H. [N - H@2, MT, ET, N]
 :~ move(MT, ET, N), phase(conquer), borders_enemy_conq(MT), half(MT, H), N <= H. [H - N@2, MT, ET, N]
 
 
-% ======== Distance to Front
-max_dist(D) :- D = #count{T : territory(T)}.
-
-front_dist(T, 0) :- borders_enemy(T).
-% flood distance through land we own
-front_dist(T, D) :- mine(T), neighbor(T, M), front_dist(M, D0), D = D0 + 1, max_dist(MX), D <= MX.
-% keep only the shortest distance per tile
-nearest_front(T, MIN) :- front_dist(T, _), MIN = #min{D : front_dist(T, D)}.
-
-% weakest enemy army adjacent to one of our front tiles (lower = easier future attack)
-min_adj_enemy(T, S) :- borders_enemy(T), my_id(MYID),
-    S = #min{EA, ET : neighbor(T, ET), owner(ET, EID), EID != MYID, armies_present(ET, EA)}.
-
-% march troops toward the front: reward scales with stack size and hops gained,
-% so big stacks move first and prefer the route that closes the most distance
-:~ move(FROM, TO, N), phase(choose), nearest_front(FROM, DF), nearest_front(TO, DT), DT < DF, R = (DF - DT) * N * 10. [0 - R@2, FROM, TO, N]
-% symmetric penalty so we never retreat a stack toward the rear
-:~ move(FROM, TO, N), phase(choose), nearest_front(FROM, DF), nearest_front(TO, DT), DT > DF, P = (DT - DF) * N * 10. [P@2, FROM, TO, N]
-
-% @1 tie-break: among equally-positioned destinations, pile the biggest stack onto the
-% front tile facing the weakest (most attackable) enemy, setting up a decisive attack next turn
-:~ move(FROM, TO, N), phase(choose), min_adj_enemy(TO, S), C = S - 10 * N. [C@1, FROM, TO, N]
-
-#show attack/2.
-#show pass/0.
-#show move/3.
-#show fortify/2.
+% #show attack/2.
+% #show pass/0.
+% #show move/3.
+% #show fortify/2.
