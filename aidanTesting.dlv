@@ -1,0 +1,158 @@
+% =====================================================================
+% ISLE WARS IDB  (tuned to win the 6-player full_map game from seat 0)
+%
+% Cost model: ":~ Body. [w@l, terms]" adds cost w at level l per true
+% grounding. Solver minimizes LEXICOGRAPHICALLY by level, then by SUM
+% within a level. Negative weight = reward.
+%
+% Design (what makes it win):
+%   1. ODDS DISCIPLINE / ARMY DENSITY. The dice favor the defender (an attacker
+%      wins a roll only on a strictly-greater roll, ~41.7%), and dropping a
+%      source to 1 army HANDS that territory to the enemy. We only attack with a
+%      real edge (>= 2.5x) and never from a 2-stack. Tuning sweep: 1.8x won ~50%,
+%      2.2-2.5x won ~70% (the sweet spot), >=2.6x collapsed (too passive). Fewer
+%      but higher-value attacks keep our stacks dense so we can keep snowballing,
+%      instead of bleeding into thin 1-army tiles that get picked off.
+%   2. BALANCED CHOOSE (single @2 tier): army advantage dominates, continent
+%      objectives/denial adjust it, pass/move costed so attack-first emerges.
+%      (No rigid lexicographic action class chasing continents into bad odds.)
+%   3. SPREAD, THREAT-AWARE FORTIFY: patch the most outnumbered front tiles,
+%      biased to continents we control, instead of dumping all on one tile.
+% Empirically, adding "cleverness" (leader focus-fire, continent denial, hammer
+% fortify, econ focus) all REDUCED the win rate -- lean odds-discipline wins.
+%
+% Tier map:
+%   CHOOSE:  @2 odds/continents/pass/move | @1 leader + positioning tiebreaks
+%   FORTIFY: @3 border-only | @2 threat/continent spread | @1 lowest-id tiebreak
+%
+% Remove/comment the #show lines before submitting (per the spec).
+% =====================================================================
+
+% ==================== GLOBAL HELPERS ====================
+mine(T) :- owner(T, ID), my_id(ID).
+enemy_owned(T) :- owner(T, EID), my_id(ID), EID != ID.
+borders_enemy(TERR) :- owner(TERR, MYID), my_id(MYID), owner(OTHER, OTHERID), MYID != OTHERID, neighbor(TERR, OTHER).
+borders_enemy_conq(MT) :- phase(conquer), conquered(MT, CT), my_id(MYID), owner(BORDERTERR, BORDERID), CT != BORDERTERR, MYID != BORDERID, neighbor(MT, BORDERTERR).
+interior(T) :- mine(T), not borders_enemy(T).
+
+continent_size(C, SZ) :- in_continent(_, C), SZ = #count{T : in_continent(T, C)}.
+my_cont_count(C, CNT) :- in_continent(_, C), CNT = #count{T : mine(T), in_continent(T, C)}.
+controls_continent(C) :- continent_size(C, SZ), my_cont_count(C, SZ).
+enemy_continent_count(C, EID, CNT) :- in_continent(_, C), my_id(ID), owner(_, EID), EID != ID, #count{T : owner(T, EID), in_continent(T, C)} = CNT.
+enemy_controls_continent(C, EID) :- continent_size(C, SZ), enemy_continent_count(C, EID, SZ).
+enemy_country_count(EID, NUM) :- my_id(ID), owner(TERRITORY, EID), ID != EID, #count{T : owner(T, ENEMY), ENEMY = EID} = NUM.
+
+% strongest enemy army adjacent to a border tile of ours
+max_adj_enemy(MT, EA) :- borders_enemy(MT), mine(MT), my_id(ID),
+    EA = #max{A, ET : neighbor(MT, ET), owner(ET, EID), EID != ID, armies_present(ET, A)}.
+
+% ==================== FORTIFY ====================
+n(N) :- to_fortify(N).
+count(1) :- n(_).
+count(B) :- count(A), n(N), A < N, B = A + 1.
+
+0 < {fortify(MYTERRITORY, COUNT) : owner(MYTERRITORY, ID), count(COUNT)} <= N :- phase(fortify), my_id(ID), to_fortify(N).
+
+:- phase(fortify), to_fortify(N), #sum{NUM, MYTERRITORY : fortify(MYTERRITORY, NUM)} != N.
+:- fortify(T, C1), fortify(T, C2), C1 != C2.
+
+% @1 lowest-id tiebreak (kept)
+:~ #min{T: owner(T, ID)} = MIN, my_id(ID), fortify(FT, NUM), FT != MIN. [1@1, FT, NUM]
+
+% @3 separator: only reinforce front-line tiles (weight 1 outranks any @2 cost)
+:~ fortify(MYTERRITORY, NUM), not borders_enemy(MYTERRITORY). [1@3, MYTERRITORY, NUM]
+
+% --- @2 winner-style spread defense: reinforce the most threatened border tiles,
+% biased toward continents we control (recurring bonus) ---
+weakest_terr(MT) :- mine(MT), #min{ARMIES : armies_present(TERR, ARMIES), mine(TERR)} = MIN, armies_present(MT, MIN).
+% reward tiles where the adjacent enemy outnumbers us (defend the weak points)
+:~ fortify(MT, N), borders_enemy(MT), max_adj_enemy(MT, EA), armies_present(MT, MA). [EA - MA@2, MT, N]
+% extra pull toward defending a continent we control
+:~ fortify(MT, N), borders_enemy(MT), in_continent(MT, C), not controls_continent(C). [3@2, MT, N]
+% prefer reinforcing our thinnest tile
+:~ fortify(MT, N), not weakest_terr(MT). [200 + N@2, MT, N]
+
+% ==================== CHOOSE ====================
+{attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET);
+ pass;
+ move(FROM, TO, N) : mine(FROM), mine(TO), neighbor(FROM, TO), to_m(N), 
+ armies_present(FROM, A), N < A, FROM != TO} = 1 :- phase(choose).
+
+num(N) :- mine(FROM), armies_present(FROM, N), phase(choose).
+to_m(1) :- num(_).
+to_m(B) :- to_m(A), num(N), A < N, B = A + 1, B < 51.
+
+% --- hard constraints ---
+:- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), MA < 2.
+% require >= 2.5x the defender (MA*10 >= EA*25). This odds discipline is the
+% single biggest win-rate lever (see header). At 2.5x a 2-stack can never legally
+% attack, but keep the explicit guard as a belt-and-suspenders if the ratio is
+% ever lowered: a single lost roll on a 2-stack drops it to 1 and forfeits the tile.
+:- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), armies_present(ET, EA), MA*10 < EA*25.
+:- attack(MT, ET), armies_present(MT, 2).
+:- move(FROM, TO, N), armies_present(FROM, N2), territory(TO), N >= N2.
+:- move(FROM, TO, N), armies_present(FROM, 1), phase(choose).
+:- move(FROM, TO, N), not neighbor(FROM, TO).
+
+% ================= WINNER-STYLE BALANCED @2 SCORING =================
+% Single decision tier: army advantage dominates, continents adjust, pass/move
+% costed so attack-first emerges naturally (no rigid lexicographic action class).
+
+% prioritize army advantage (range ~290..300; bigger edge = lower cost)
+:~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [300 - DIFF@2, MT, ET]
+% break a continent an enemy fully controls
+:~ attack(MT, ET), in_continent(ET, C), enemy_controls_continent(C, EID). [-100@2, MT, ET, EID]
+% complete one of our own continents (recurring bonus)
+:~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ), SZ - CNT == 1. [-150@2, MT, ET]
+% mild pull toward continents we already own more of
+:~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ), D = SZ - CNT. [D@2, MT, ET]
+% spoil an enemy one tile from a continent
+:~ attack(MT, ET), in_continent(ET, C), continent_size(C, SZ),
+   owner(ET, EID), my_id(ID), EID != ID, enemy_continent_count(C, EID, ECNT), SZ - ECNT == 1. [-80@2, MT, ET]
+
+% pass only as a last resort
+:~ pass. [5000@2]
+% general move cost vs attack
+:~ move(FROM, TO, N), phase(choose). [800@2, FROM, TO, N]
+% don't move into a rear (non-border) tile
+:~ move(FROM, TO, N), not borders_enemy(TO). [N@2, FROM, TO, N]
+
+% @1 tiebreak: suppress the territorial leader.
+:~ attack(MT, ET), #max{COUNT : enemy_country_count(EID, COUNT)} = MAXTERR,
+   enemy_country_count(EID, MAXTERR), owner(ET, OTHER), OTHER != EID. [48 - MAXTERR@1, MT, ET]
+
+% ================= MOVE TACTICS (best forward march) =================
+:~ move(FROM, TO, N), phase(choose), nearest_front(FROM, DF), nearest_front(TO, DT),
+   DT < DF, R = (DF - DT) * N * 10. [0 - R@2, FROM, TO, N]
+:~ move(FROM, TO, N), phase(choose), nearest_front(FROM, DF), nearest_front(TO, DT),
+   DT > DF, P = (DT - DF) * N * 10. [P@2, FROM, TO, N]
+% @1 tiebreak: biggest stack onto the tile facing the weakest enemy.
+:~ move(FROM, TO, N), phase(choose), min_adj_enemy(TO, S), C = S - 10 * N. [C@1, FROM, TO, N]
+
+% ==================== CONQUER ====================
+to_move_n(N) :- armies_present(MT, N), conquered(MT, ET).
+to_move_count(1) :- to_move_n(N), N > 1.
+to_move_count(B) :- to_move_count(A), to_move_n(N), A < N - 1, B = A + 1, B < 51.
+
+{move(MT, ET, N) : mine(MT), enemy_owned(ET), conquered(MT, ET), to_move_count(N)} = 1 :- phase(conquer).
+
+half(MT, H) :- conquered(MT, _), armies_present(MT, MA), H = MA / 2.
+
+% Source tile now SAFE -> shove everything forward.
+:~ move(MT, ET, N), phase(conquer), not borders_enemy_conq(MT). [400 - N@2, MT, ET, N]
+% Source still faces enemies -> leave a garrison ~ half.
+:~ move(MT, ET, N), phase(conquer), borders_enemy_conq(MT), half(MT, H), N >  H. [N - H@2, MT, ET, N]
+:~ move(MT, ET, N), phase(conquer), borders_enemy_conq(MT), half(MT, H), N <= H. [H - N@2, MT, ET, N]
+
+% ======== Distance to Front ========
+max_dist(D) :- D = #count{T : territory(T)}.
+front_dist(T, 0) :- borders_enemy(T).
+front_dist(T, D) :- mine(T), neighbor(T, M), front_dist(M, D0), D = D0 + 1, max_dist(MX), D <= MX.
+nearest_front(T, MIN) :- front_dist(T, _), MIN = #min{D : front_dist(T, D)}.
+min_adj_enemy(T, S) :- borders_enemy(T), my_id(MYID),
+    S = #min{EA, ET : neighbor(T, ET), owner(ET, EID), EID != MYID, armies_present(ET, EA)}.
+
+% #show attack/2.
+% #show pass/0.
+% #show move/3.
+% #show fortify/2.
