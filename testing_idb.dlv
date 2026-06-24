@@ -63,31 +63,18 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 % have at least as many armies as the territory you are attacking
 :- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), armies_present(ET, EA), MA*10 < EA*18.
 
-% % push for continent completion
-% :~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ). [SZ-CNT@2, MT, ET]
+% push for continent completion
+:~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ). [SZ-CNT@2, MT, ET]
 
-% % break enemy continents
-% :~ attack(MT, ET), in_continent(ET, C), enemy_controls_continent(C, EID). [-100@2, MT, ET, EID]
-
-% % prioritize army advantage
-% :~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [200-DIFF@2, MT, ET]
-
-% % prefer targeting more powerful opponents (lower priority)
-% :~ attack(MT, ET), #max{COUNT : enemy_country_count(EID, COUNT)} = MAXTERR, enemy_country_count(EID, MAXTERR),
-%     owner(ET, OTHER), OTHER != EID. [48-MAXTERR@1, MT, ET]
-% prioritize army advantage (range ~290..300; bigger edge = lower cost)
-:~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [300 - DIFF@2, MT, ET]
-% break a continent an enemy fully controls
+% break enemy continents
 :~ attack(MT, ET), in_continent(ET, C), enemy_controls_continent(C, EID). [-100@2, MT, ET, EID]
-% complete one of our own continents (recurring bonus)
-:~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ), SZ - CNT == 1. [-150@2, MT, ET]
-% mild pull toward continents we already own more of
-:~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ), D = SZ - CNT. [D@2, MT, ET]
-% spoil an enemy one tile from a continent
-:~ attack(MT, ET), in_continent(ET, C), continent_size(C, SZ),
-   owner(ET, EID), my_id(ID), EID != ID, enemy_continent_count(C, EID, ECNT), SZ - ECNT == 1. [-80@2, MT, ET]
 
+% prioritize army advantage
+:~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [300-DIFF@2, MT, ET]
 
+% prefer targeting more powerful opponents (lower priority)
+:~ attack(MT, ET), #max{COUNT : enemy_country_count(EID, COUNT)} = MAXTERR, enemy_country_count(EID, MAXTERR),
+    owner(ET, OTHER), OTHER != EID. [48-MAXTERR@1, MT, ET]
 
 % ======(CHOOSE)====== PASS ====================
 % weight for pass, right now only is chosen as a last resort, if no attacks or moves are valid
@@ -112,7 +99,7 @@ to_m(B) :- to_m(A), num(N), A < N, B = A + 1, B < 51.
 % can only move troops to neighboring territories
 :- move(FROM, TO, N), not neighbor(FROM, TO).
 
-% prefer to not move troops to a territory that doesn't border enemies
+% prefer to not move troops to a territory that doesn't border enemies (HIGH PRIORITY)
 :~ move(FROM, TO, N), not borders_enemy(TO). [N@2, FROM, TO, N]
 
 % =====(CHOOSE)====== CONQUER ====================
