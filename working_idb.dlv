@@ -42,8 +42,8 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 % don't fortify the same territory twice
 :- fortify(T, C1), fortify(T, C2), C1 != C2.
 
-% randomly choose territory (for now) (choose territory with lowest ID num)
-:~ #min{T: owner(T, ID)} = MIN, my_id(ID), fortify(FT, NUM), FT != MIN. [1@1, FT, NUM]
+% % randomly choose territory (for now) (choose territory with lowest ID num)
+% :~ #min{T: owner(T, ID)} = MIN, my_id(ID), fortify(FT, NUM), FT != MIN. [1@1, FT, NUM]
 
 % require to not fortify territories that are not neighbors with any enemies
 :~ fortify(MYTERRITORY, NUM), not borders_enemy(MYTERRITORY). [1@3, MYTERRITORY, NUM]
@@ -58,34 +58,22 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 {attack(MT, ET) : mine(MT), enemy_owned(ET), neighbor(MT, ET); pass; move(FROM, TO, N) : mine(FROM), mine(TO), neighbor(FROM, TO),
                     to_m(N), armies_present(FROM, A), N < A, FROM != TO} = 1 :- phase(choose).
 % verify you have at least two armies on attacking territory
-:- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), MA < 2.
+:- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), MA <= 2.
 
 % have at least as many armies as the territory you are attacking
-:- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), armies_present(ET, EA), MA*10 < EA*18.
+:- attack(MT, ET), mine(MT), enemy_owned(ET), armies_present(MT, MA), armies_present(ET, EA), MA*10 < EA*22.
 
-% % push for continent completion
-% :~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ). [SZ-CNT@2, MT, ET]
-
-% % break enemy continents
-% :~ attack(MT, ET), in_continent(ET, C), enemy_controls_continent(C, EID). [-100@2, MT, ET, EID]
-
-% % prioritize army advantage
-% :~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [200-DIFF@2, MT, ET]
-
-% % prefer targeting more powerful opponents (lower priority)
-% :~ attack(MT, ET), #max{COUNT : enemy_country_count(EID, COUNT)} = MAXTERR, enemy_country_count(EID, MAXTERR),
-%     owner(ET, OTHER), OTHER != EID. [48-MAXTERR@1, MT, ET]
-% prioritize army advantage (range ~290..300; bigger edge = lower cost)
-:~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [300 - DIFF@2, MT, ET]
-% break a continent an enemy fully controls
-:~ attack(MT, ET), in_continent(ET, C), enemy_controls_continent(C, EID). [-100@2, MT, ET, EID]
 % complete one of our own continents (recurring bonus)
 :~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ), SZ - CNT == 1. [-150@2, MT, ET]
+
 % mild pull toward continents we already own more of
 :~ attack(MT, ET), in_continent(ET, C), my_cont_count(C, CNT), continent_size(C, SZ), D = SZ - CNT. [D@2, MT, ET]
-% spoil an enemy one tile from a continent
-:~ attack(MT, ET), in_continent(ET, C), continent_size(C, SZ),
-   owner(ET, EID), my_id(ID), EID != ID, enemy_continent_count(C, EID, ECNT), SZ - ECNT == 1. [-80@2, MT, ET]
+
+% break enemy continents
+:~ attack(MT, ET), in_continent(ET, C), enemy_controls_continent(C, EID). [-100@2, MT, ET, EID]
+
+% prioritize army advantage
+:~ attack(MT, ET), armies_present(MT, MA), armies_present(ET, EA), DIFF = MA - EA. [300-DIFF@2, MT, ET]
 
 % prefer targeting weaker opponents (lower priority)
 :~ attack(MT, ET), #min{COUNT : enemy_country_count(EID, COUNT)} = MINTERR, enemy_country_count(EID, MINTERR),
@@ -125,10 +113,13 @@ to_move_count(B) :- to_move_count(A), to_move_n(N), A < N - 1, B = A + 1, B < 51
 
 {move(MT, ET, N) : mine(MT), enemy_owned(ET), conquered(MT, ET), to_move_count(N)} = 1 :- phase(conquer).
 
-% hard constraint to move all troops away from territory if it no longer borders any territories
-% weak constraint to move the max -1 available armies
-:~ move(MT, ET, N), phase(conquer). [400-N@2, MT, ET, N]
-:~ move(MT, ET, N), borders_enemy_conq(MT), armies_present(MT, MA), N = MA / 2, phase(conquer). [200-N@2, MT, ET, N]
+half(MT, H) :- conquered(MT, _), armies_present(MT, MA), H = MA / 2.
+
+% Source tile now SAFE -> shove everything forward.
+:~ move(MT, ET, N), phase(conquer), not borders_enemy_conq(MT). [400 - N@2, MT, ET, N]
+% Source still faces enemies -> leave a garrison ~ half.
+:~ move(MT, ET, N), phase(conquer), borders_enemy_conq(MT), half(MT, H), N >  H. [N - H@2, MT, ET, N]
+:~ move(MT, ET, N), phase(conquer), borders_enemy_conq(MT), half(MT, H), N <= H. [H - N@2, MT, ET, N]
 
 
 % ======== Distance to Front
