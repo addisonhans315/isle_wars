@@ -87,7 +87,9 @@ count(B) :- count(A), n(N), A < N, B = A + 1.
 :~ attack(MT, ET), in_continent(ET, C), continent_size(C, SZ),
    owner(ET, EID), my_id(ID), EID != ID, enemy_continent_count(C, EID, ECNT), SZ - ECNT == 1. [-80@2, MT, ET]
 
-
+% prefer targeting weaker opponents (lower priority)
+:~ attack(MT, ET), #min{COUNT : enemy_country_count(EID, COUNT)} = MINTERR, enemy_country_count(EID, MINTERR),
+    owner(ET, OTHER), OTHER != EID. [48-MINTERR@1, MT, ET]
 
 % ======(CHOOSE)====== PASS ====================
 % weight for pass, right now only is chosen as a last resort, if no attacks or moves are valid
